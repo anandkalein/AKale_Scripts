@@ -1,0 +1,24 @@
+---
+- host: all
+  become: yes
+  tasks:
+
+  vars:
+   username:'anand'
+   uid:'1020'
+
+  - name: Create user {{username}} {{uid}}
+    user: name="{{username}}" uid="{{uid}}"
+
+  - name: Install Package
+    yum: name=ntp state=present
+    notify: restart service
+    ignore_errors: yes
+
+  - name: Copy File
+    file: src=/etc/user.yml dest=/etc/user.yml
+    ignore_errors: yes
+
+  handlers:
+  - name: restart service
+    service: name=ntpd state=started
