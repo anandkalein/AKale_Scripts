@@ -1,0 +1,102 @@
+#Script Name: Get folder NTFS permission details
+#Version: 0.1
+#Developer: Anand Kale
+#Email: coolandy.net@gmail.com
+
+##################################################################################
+###Input Section### 
+##################################################################################
+
+[System.Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic') | Out-Null
+$FLDR = [Microsoft.VisualBasic.Interaction]::InputBox("ScriptInput: Path for Permission Check")
+
+$path="$env:TEMP"
+
+
+##################################################################################
+###Function Section### 
+##################################################################################
+
+Function Get-FolderACL{[cmdletbinding()]
+
+    Param(
+        [Parameter(Mandatory=$True,ValueFromPipeline=$True,ValueFromPipelineByPropertyName=$True)][ValidateNotNullorEmpty()][string[]]$Path
+    )#EndParam
+        BEGIN{Write-Verbose "Reading ACLs for $($MyInvocation.Mycommand)"
+        }#BEGIN
+
+        PROCESS{$Directory = Get-Acl -Path $Path
+                    Try{
+                        ForEach($Dir in $Directory.Access){
+                            Write-Verbose "Reading Permissions for $($Dir.IdentityReference)"
+                            [PSCustomObject]@{
+                                Path = $Path
+                                Group = $Dir.IdentityReference
+                                AccessType = $Dir.AccessControlType
+                                Rights = $Dir.FileSystemRights
+                                }
+                        }#EndForEach
+                    }#EndTry
+                    Catch{
+                          Write-Error $PSItem
+                    }#EndCatch
+         }#PROCESS
+         
+         END{Write-Verbose "Ending $($MyInvocation.Mycommand)"
+         }#END
+
+}#EndFunction
+
+##################################################################################
+###Script Section### 
+##################################################################################
+
+
+
+$List= Get-ChildItem $FLDR | % { $_.FullName}
+
+$list | Get-FolderACL| select Group,Rights | Sort-Object Group | Export-Csv "$path\List.csv" -NoTypeInformation
+
+#Get-FolderACL $FLDR |select Group,Rights | Sort-Object Group | Export-Csv "$path\List.csv" -NoTypeInformation
+
+##################################################################################
+###Reporting Section### 
+##################################################################################
+
+Invoke-Expression "$path\List.csv"
+
+##########################################################################
+#### Logging Section #################################
+##########################################################################
+#This makes an entry in the event log with the $emailBotBody to track as Information
+$returnSuccess = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).`
+IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+if ($returnSuccess)
+{
+
+## Write in EventLog #########
+	New-EventLog –LogName Application –Source “NonRBAScript” -ErrorAction Ignore 
+	Write-EventLog -LogName "Application" -Source "NonRBAScript" -EventID 2266 `
+	-EntryType Information -Message "$emailBotBody" `
+	-Category 1 -RawData 10,20
+	
+	$var=Test-Path "C:\Automation_log"
+	
+## Write in Log Directory #######
+	
+if($var -match "False")
+{
+mkdir "C:\Automation_log"
+}
+$path="C:\Automation_log"
+$userName=whoami
+$scriptName=$MyInvocation.MyCommand.Name
+$date=get-date
+ 
+"$($userName)   $($scriptName)   $($date)"  >> "$path\script_execution_log.txt"
+}
+else
+{
+	Write-Host "You need to be a administrator to log the details in EventLog" -ForegroundColor Red
+} 
+######## Logging Code end ##############################################
